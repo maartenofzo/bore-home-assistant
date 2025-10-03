@@ -34,34 +34,34 @@ class BoreOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_TO, default=self.config_entry.options.get(CONF_TO)
+                        CONF_TO, default=self.config_entry.options.get(CONF_TO, self.config_entry.data.get(CONF_TO))
                     ): str,
                     vol.Required(
                         CONF_LOCAL_PORT,
-                        default=self.config_entry.options.get(CONF_LOCAL_PORT),
+                        default=self.config_entry.options.get(CONF_LOCAL_PORT, self.config_entry.data.get(CONF_LOCAL_PORT)),
                     ): int,
                     vol.Optional(
                         CONF_LOCAL_HOST,
                         default=self.config_entry.options.get(
-                            CONF_LOCAL_HOST, DEFAULT_LOCAL_HOST
+                            CONF_LOCAL_HOST, self.config_entry.data.get(CONF_LOCAL_HOST, DEFAULT_LOCAL_HOST)
                         ),
                     ): str,
                     vol.Optional(
                         CONF_PORT,
-                        default=self.config_entry.options.get(CONF_PORT, DEFAULT_PORT),
+                        default=self.config_entry.options.get(CONF_PORT, self.config_entry.data.get(CONF_PORT, DEFAULT_PORT)),
                     ): int,
                     vol.Optional(
                         CONF_SECRET,
-                        default=self.config_entry.options.get(CONF_SECRET),
+                        default=self.config_entry.options.get(CONF_SECRET, self.config_entry.data.get(CONF_SECRET)),
                     ): str,
                     vol.Optional(
                         CONF_CHECK_URL,
-                        default=self.config_entry.options.get(CONF_CHECK_URL),
+                        default=self.config_entry.options.get(CONF_CHECK_URL, self.config_entry.data.get(CONF_CHECK_URL)),
                     ): str,
                     vol.Optional(
                         CONF_UPDATE_INTERVAL,
                         default=self.config_entry.options.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                            CONF_UPDATE_INTERVAL, self.config_entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
                         ),
                     ): vol.In(UPDATE_INTERVALS),
                 }
