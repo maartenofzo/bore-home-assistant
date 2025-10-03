@@ -113,12 +113,17 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         if not check_url:
             return {"status": "connected"}  # Assume connected if no check url
 
-        host, port = check_url.split(":")
+        if ":" in check_url:
+            host, port_str = check_url.split(":")
+            port = int(port_str)
+        else:
+            host = check_url
+            port = 443
 
         try:
-            with socket.create_connection((host, int(port)), timeout=10):
+            with socket.create_connection((host, port), timeout=10):
                 return {"status": "connected"}
-        except (socket.timeout, ConnectionRefusedError) as ex:
+        except (socket.timeout, ConnectionRefusedError, socket.gaierror) as ex:
             _LOGGER.error("Connection error on %s: %s", check_url, ex)
             raise UpdateFailed(f"Connection error: {ex}") from ex
 
