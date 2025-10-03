@@ -83,7 +83,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.hass = hass
         update_interval = get_update_interval(
-            self.entry.options.get(CONF_UPDATE_INTERVAL, self.entry.data[CONF_UPDATE_INTERVAL])
+            self.config_data.get(CONF_UPDATE_INTERVAL, self.entry.data[CONF_UPDATE_INTERVAL])
         )
 
         super().__init__(
@@ -106,12 +106,15 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         if not self._bore_process:
             await self._start_bore_process()
 
-        check_url = self.entry.data.get(CONF_CHECK_URL)
+        check_url = self.config_data.get(CONF_CHECK_URL)
         if not check_url and self._assigned_port:
-            check_url = f"http://{self.entry.data[CONF_TO]}:{self._assigned_port}"
+            check_url = f"https://{self.config_data.get(CONF_TO)}:{self._assigned_port}"
 
         if not check_url:
             return {"status": "connected"}  # Assume connected if no check url
+
+        if not check_url.startswith(("http://", "https://")):
+            check_url = f"https://{check_url}"
 
         try:
             async with httpx.AsyncClient() as client:
@@ -130,16 +133,16 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         args = [
             "bore",
             "local",
-            str(self.entry.data[CONF_LOCAL_PORT]),
+            str(self.config_data.get(CONF_LOCAL_PORT)),
             "--to",
-            self.entry.data[CONF_TO],
+            self.config_data.get(CONF_TO),
             "--local-host",
-            self.entry.data[CONF_LOCAL_HOST],
+            self.config_data.get(CONF_LOCAL_HOST),
             "--port",
-            str(self.entry.data[CONF_PORT]),
+            str(self.config_data.get(CONF_PORT)),
         ]
-        if self.entry.data.get(CONF_SECRET):
-            args.extend(["--secret", self.entry.data[CONF_SECRET]])
+        if self.config_data.get(CONF_SECRET):
+            args.extend(["--secret", self.config_data.get(CONF_SECRET)])
 
         try:
             self._bore_process = await asyncio.create_subprocess_exec(
