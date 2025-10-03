@@ -98,6 +98,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._bore_process = None
         self._assigned_port = None
+        self._healthy = True
 
     @property
     def config_data(self):
@@ -106,10 +107,16 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from the Bore tunnel."""
+        # If the last health check failed, restart the process now before this check.
+        if not self._healthy:
+            _LOGGER.info("Previous health check failed. Restarting bore process now.")
+            await self._stop_bore_process()
+
+        # Start process if it's not running (or was just stopped).
         if self._bore_process is None or self._bore_process.returncode is not None:
             _LOGGER.info("Bore process not running. Starting...")
             await self._start_bore_process()
-            # Give bore a moment to establish the tunnel before the first check
+            # Give bore a moment to establish the tunnel before checking.
             await asyncio.sleep(5)
 
         check_url = self.config_data.get(CONF_CHECK_URL)
@@ -117,6 +124,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             check_url = f"{self.config_data.get(CONF_TO)}:{self._assigned_port}"
 
         if not check_url:
+            self._healthy = True
             return {"status": "connected"}  # Assume connected if no check url
 
         if ":" in check_url:
@@ -129,11 +137,16 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             with socket.create_connection((host, port), timeout=10):
                 _LOGGER.debug("Health check to %s successful.", check_url)
+                self._healthy = True  # Mark as healthy for the next run.
                 return {"status": "connected"}
         except (socket.timeout, ConnectionRefusedError, socket.gaierror) as ex:
-            _LOGGER.warning("Health check to %s failed: %s. Restarting bore tunnel.", check_url, ex)
-            await self._stop_bore_process()
-            # Signal an update failure, the next update will restart the process
+            _LOGGER.warning(
+                "Health check to %s failed: %s. The tunnel will be restarted on the next update.",
+                check_url,
+                ex,
+            )
+            self._healthy = False  # Mark as unhealthy for the next run.
+            # Do not stop the process now; just signal the update failure.
             raise UpdateFailed(f"Health check failed: {ex}") from ex
 
     async def _stop_bore_process(self):
