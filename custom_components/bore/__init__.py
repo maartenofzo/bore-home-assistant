@@ -33,11 +33,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+
     hass.async_create_task(
         hass.config_entries.async_forward_entry_setup(entry, "sensor")
     )
 
     return True
+
+
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -74,7 +81,10 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
         self.entry = entry
-        update_interval = get_update_interval(entry.data[CONF_UPDATE_INTERVAL])
+        self.hass = hass
+        update_interval = get_update_interval(
+            self.entry.options.get(CONF_UPDATE_INTERVAL, self.entry.data[CONF_UPDATE_INTERVAL])
+        )
 
         super().__init__(
             hass,
@@ -85,6 +95,11 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._bore_process = None
         self._assigned_port = None
+
+    @property
+    def config_data(self):
+        """Return the config data."""
+        return self.entry.options or self.entry.data
 
     async def _async_update_data(self):
         """Fetch data from the Bore tunnel."""

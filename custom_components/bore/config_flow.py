@@ -17,6 +17,8 @@ from .const import (
     UPDATE_INTERVALS,
 )
 
+from .options_flow import BoreOptionsFlow
+
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +27,11 @@ class BoreConfigFlow(ConfigFlow, domain=DOMAIN):
     """Bore config flow."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        """Get the options flow for this handler."""
+        return BoreOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
