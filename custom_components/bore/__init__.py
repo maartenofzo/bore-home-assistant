@@ -49,6 +49,9 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    coordinator: BoreDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    await coordinator._stop_bore_process()
+
     unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "sensor")
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
@@ -103,8 +106,11 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from the Bore tunnel."""
-        if not self._bore_process:
+        if self._bore_process is None or self._bore_process.returncode is not None:
+            _LOGGER.info("Bore process not running. Starting...")
             await self._start_bore_process()
+            # Give bore a moment to establish the tunnel before the first check
+            await asyncio.sleep(5)
 
         check_url = self.config_data.get(CONF_CHECK_URL)
         if not check_url and self._assigned_port:
@@ -118,14 +124,32 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             port = int(port_str)
         else:
             host = check_url
-            port = 443
+            port = 443 # Default to HTTPS port
 
         try:
             with socket.create_connection((host, port), timeout=10):
+                _LOGGER.debug("Health check to %s successful.", check_url)
                 return {"status": "connected"}
         except (socket.timeout, ConnectionRefusedError, socket.gaierror) as ex:
-            _LOGGER.error("Connection error on %s: %s", check_url, ex)
-            raise UpdateFailed(f"Connection error: {ex}") from ex
+            _LOGGER.warning("Health check to %s failed: %s. Restarting bore tunnel.", check_url, ex)
+            await self._stop_bore_process()
+            # Signal an update failure, the next update will restart the process
+            raise UpdateFailed(f"Health check failed: {ex}") from ex
+
+    async def _stop_bore_process(self):
+        """Stop the bore process."""
+        if self._bore_process and self._bore_process.returncode is None:
+            _LOGGER.info("Stopping bore process...")
+            try:
+                self._bore_process.terminate()
+                await asyncio.wait_for(self._bore_process.wait(), timeout=5.0)
+                _LOGGER.info("Bore process terminated.")
+            except asyncio.TimeoutError:
+                _LOGGER.warning("Bore process did not terminate gracefully, killing it.")
+                self._bore_process.kill()
+                await self._bore_process.wait()
+            finally:
+                self._bore_process = None
 
     async def _start_bore_process(self):
         """Start the bore process."""
