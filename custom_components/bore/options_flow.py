@@ -2,12 +2,13 @@
 """Options flow for Bore."""
 import voluptuous as vol
 from homeassistant.config_entries import OptionsFlow
-from homeassistant.const import CONF_PORT, CONF_SECRET
 from .const import (
     DOMAIN,
     CONF_LOCAL_HOST,
     CONF_LOCAL_PORT,
     CONF_TO,
+    CONF_PORT,
+    CONF_SECRET,
     CONF_CHECK_URL,
     CONF_UPDATE_INTERVAL,
     DEFAULT_LOCAL_HOST,
