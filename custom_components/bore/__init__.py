@@ -10,6 +10,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from homeassistant.helpers.httpx_client import get_async_client
+
 from .const import (
     DOMAIN,
     CONF_LOCAL_PORT,
@@ -82,6 +84,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize the coordinator."""
         self.entry = entry
         self.hass = hass
+        self.client = None
         update_interval = get_update_interval(
             self.config_data.get(CONF_UPDATE_INTERVAL, self.entry.data[CONF_UPDATE_INTERVAL])
         )
@@ -103,6 +106,9 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from the Bore tunnel."""
+        if not self.client:
+            self.client = await self.hass.async_add_executor_job(httpx.AsyncClient)
+
         if not self._bore_process:
             await self._start_bore_process()
 
@@ -117,9 +123,8 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             check_url = f"https://{check_url}"
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(check_url)
-                response.raise_for_status()
+            response = await self.client.get(check_url)
+            response.raise_for_status()
             return {"status": "connected"}
         except httpx.HTTPStatusError as ex:
             _LOGGER.error("HTTP status error on %s: %s", check_url, ex)
