@@ -1,0 +1,11 @@
+
+{
+  "domain": "bore",
+  "name": "Bore",
+  "config_flow": true,
+  "documentation": "https://github.com/maartenpaauw/bore-home-assistant",
+  "issue_tracker": "https://github.com/maartenpaauw/bore-home-assistant/issues",
+  "codeowners": ["@maartenpaauw"],
+  "version": "0.1.0",
+  "iot_class": "cloud_polling"
+}
