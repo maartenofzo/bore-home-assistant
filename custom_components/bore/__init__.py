@@ -196,22 +196,42 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         self.hass.async_create_task(self._log_output())
 
     async def _log_output(self):
-        """Log the output of the bore process."""
-        while self._bore_process.returncode is None:
-            try:
-                async with async_timeout.timeout(1):
-                    line = await self._bore_process.stdout.readline()
-                    if not line:
-                        break
-                    line = line.decode().strip()
-                    _LOGGER.info(line)
-                    if "listening at" in line:
-                        parts = line.split("listening at")
-                        if len(parts) == 2:
-                            address = parts[1].strip()
-                            self._assigned_port = int(address.split(":")[-1])
-            except asyncio.TimeoutError:
-                pass
+        """Log the output of the bore process from stdout and stderr."""
 
-        _LOGGER.info("Bore process terminated with code %s", self._bore_process.returncode)
-        self._bore_process = None
+        async def log_stdout():
+            """Read from stdout, log, and parse for the assigned port."""
+            while True:
+                try:
+                    line_bytes = await self._bore_process.stdout.readline()
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+                if not line_bytes:
+                    break
+                line = line_bytes.decode().strip()
+                _LOGGER.info(line)
+                if "listening at" in line:
+                    parts = line.split("listening at")
+                    if len(parts) == 2:
+                        address = parts[1].strip()
+                        self._assigned_port = int(address.split(":")[-1])
+
+        async def log_stderr():
+            """Read from stderr and log as an error."""
+            while True:
+                try:
+                    line_bytes = await self._bore_process.stderr.readline()
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+                if not line_bytes:
+                    break
+                _LOGGER.error("Bore process stderr: %s", line_bytes.decode().strip())
+        
+        try:
+            # Run both logging tasks concurrently until the process exits
+            await asyncio.gather(log_stdout(), log_stderr())
+        finally:
+            if self._bore_process:
+                await self._bore_process.wait()
+                _LOGGER.info(
+                    "Bore process has terminated with code %s", self._bore_process.returncode
+                )
