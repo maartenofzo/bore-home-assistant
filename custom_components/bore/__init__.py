@@ -126,11 +126,17 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         if self.entry.data.get(CONF_SECRET):
             args.extend(["--secret", self.entry.data[CONF_SECRET]])
 
-        self._bore_process = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            self._bore_process = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as ex:
+            _LOGGER.error(
+                "The 'bore' command was not found. Please make sure it is installed and in your PATH. See https://github.com/ekzhang/bore for installation instructions."
+            )
+            raise UpdateFailed("Bore command not found") from ex
 
         # Read output to find the assigned port and log everything
         self.hass.async_create_task(self._log_output())
