@@ -2,12 +2,13 @@
 """Config flow for Bore."""
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow
-from homeassistant.const import CONF_PORT, CONF_SECRET
+from homeassistant.const import CONF_PORT
 from .const import (
     DOMAIN,
     CONF_LOCAL_HOST,
     CONF_LOCAL_PORT,
     CONF_TO,
+    CONF_SECRET,
     CONF_CHECK_URL,
     CONF_UPDATE_INTERVAL,
     DEFAULT_LOCAL_HOST,
@@ -16,6 +17,10 @@ from .const import (
     UPDATE_INTERVALS,
 )
 
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+
 class BoreConfigFlow(ConfigFlow, domain=DOMAIN):
     """Bore config flow."""
 
@@ -23,6 +28,7 @@ class BoreConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
+        _LOGGER.debug("Bore config flow started")
         errors = {}
 
         if user_input is not None:
