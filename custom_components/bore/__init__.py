@@ -5,12 +5,10 @@ import logging
 from datetime import timedelta
 
 import async_timeout
-import httpx
+import socket
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-
-from homeassistant.helpers.httpx_client import get_async_client
 
 from .const import (
     DOMAIN,
@@ -84,7 +82,6 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize the coordinator."""
         self.entry = entry
         self.hass = hass
-        self.client = None
         update_interval = get_update_interval(
             self.config_data.get(CONF_UPDATE_INTERVAL, self.entry.data[CONF_UPDATE_INTERVAL])
         )
@@ -106,32 +103,24 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from the Bore tunnel."""
-        if not self.client:
-            self.client = await self.hass.async_add_executor_job(httpx.AsyncClient)
-
         if not self._bore_process:
             await self._start_bore_process()
 
         check_url = self.config_data.get(CONF_CHECK_URL)
         if not check_url and self._assigned_port:
-            check_url = f"https://{self.config_data.get(CONF_TO)}:{self._assigned_port}"
+            check_url = f"{self.config_data.get(CONF_TO)}:{self._assigned_port}"
 
         if not check_url:
             return {"status": "connected"}  # Assume connected if no check url
 
-        if not check_url.startswith(("http://", "https://")):
-            check_url = f"https://{check_url}"
+        host, port = check_url.split(":")
 
         try:
-            response = await self.client.get(check_url)
-            response.raise_for_status()
-            return {"status": "connected"}
-        except httpx.HTTPStatusError as ex:
-            _LOGGER.error("HTTP status error on %s: %s", check_url, ex)
-            raise UpdateFailed(f"HTTP status error: {ex.response.status_code}") from ex
-        except httpx.RequestError as ex:
-            _LOGGER.error("Request error on %s: %s", check_url, ex)
-            raise UpdateFailed(f"Request error: {ex}") from ex
+            with socket.create_connection((host, int(port)), timeout=10):
+                return {"status": "connected"}
+        except (socket.timeout, ConnectionRefusedError) as ex:
+            _LOGGER.error("Connection error on %s: %s", check_url, ex)
+            raise UpdateFailed(f"Connection error: {ex}") from ex
 
     async def _start_bore_process(self):
         """Start the bore process."""
