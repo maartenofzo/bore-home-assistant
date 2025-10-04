@@ -173,26 +173,35 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             self._log_output_task.cancel()
 
         if self._bore_process and self._bore_process.returncode is None:
-            _LOGGER.info("Stopping bore process group...")
-            try:
-                pgid = os.getpgid(self._bore_process.pid)
-                os.killpg(pgid, signal.SIGINT)
-                await asyncio.wait_for(self._bore_process.wait(), timeout=5.0)
-                _LOGGER.info("Bore process group terminated gracefully.")
-            except (ProcessLookupError, PermissionError) as ex:
-                _LOGGER.info("Bore process group already gone: %s", ex)
-            except asyncio.TimeoutError:
-                _LOGGER.warning(
-                    "Bore process group did not terminate gracefully, sending SIGKILL."
-                )
+            if os.name == 'posix':
+                _LOGGER.info("Stopping bore process group (POSIX)...")
                 try:
-                    os.killpg(pgid, signal.SIGKILL)
-                    await asyncio.wait_for(self._bore_process.wait(), timeout=2.0)
-                    _LOGGER.info("Bore process group killed.")
-                except Exception as kill_ex:
-                    _LOGGER.error("Error killing bore process group: %s", kill_ex)
-            except Exception as ex:
-                _LOGGER.error("Error stopping bore process group: %s", ex)
+                    pgid = os.getpgid(self._bore_process.pid)
+                    os.killpg(pgid, signal.SIGINT) # Try graceful shutdown
+                    await asyncio.wait_for(self._bore_process.wait(), timeout=5.0)
+                    _LOGGER.info("Bore process group terminated gracefully.")
+                except (ProcessLookupError, PermissionError) as ex:
+                    _LOGGER.info("Bore process group already gone: %s", ex)
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        "Bore process group did not terminate gracefully, sending SIGKILL."
+                    )
+                    try:
+                        os.killpg(pgid, signal.SIGKILL) # Forceful shutdown
+                        await asyncio.wait_for(self._bore_process.wait(), timeout=2.0)
+                        _LOGGER.info("Bore process group killed.")
+                    except Exception as kill_ex:
+                        _LOGGER.error("Error killing bore process group: %s", kill_ex)
+                except Exception as ex:
+                    _LOGGER.error("Error stopping bore process group: %s", ex)
+            else: # Non-POSIX (e.g., Windows)
+                _LOGGER.info("Stopping bore process (non-POSIX)...")
+                try:
+                    self._bore_process.kill() # Forceful kill for non-POSIX
+                    await asyncio.wait_for(self._bore_process.wait(), timeout=5.0)
+                    _LOGGER.info("Bore process terminated (non-POSIX).")
+                except Exception as ex:
+                    _LOGGER.error("Error killing bore process (non-POSIX): %s", ex)
             finally:
                 self._bore_process = None
 
@@ -212,12 +221,16 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         if self.config_data.get(CONF_SECRET):
             args.extend(["--secret", self.config_data.get(CONF_SECRET)])
 
+        kwargs = {
+            'stdout': asyncio.subprocess.PIPE,
+            'stderr': asyncio.subprocess.PIPE,
+        }
+        if os.name == 'posix':
+            kwargs['preexec_fn'] = os.setsid
+
         try:
             self._bore_process = await asyncio.create_subprocess_exec(
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                preexec_fn=os.setsid
+                *args, **kwargs
             )
         except FileNotFoundError as ex:
             _LOGGER.error(
