@@ -157,21 +157,10 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _stop_bore_process(self):
         """Stop the bore process."""
-        if self._log_output_task and not self._log_output_task.done():
-            self._log_output_task.cancel()
-
         if self._bore_process and self._bore_process.returncode is None:
-            _LOGGER.info("Stopping bore process...")
-            try:
-                self._bore_process.send_signal(signal.SIGINT)
-                await asyncio.wait_for(self._bore_process.wait(), timeout=5.0)
-                _LOGGER.info("Bore process terminated.")
-            except asyncio.TimeoutError:
-                _LOGGER.warning("Bore process did not terminate gracefully, killing it.")
-                self._bore_process.kill()
-                await self._bore_process.wait()
-            finally:
-                self._bore_process = None
+            _LOGGER.info("Forcefully stopping bore process with SIGKILL.")
+            self._bore_process.kill()
+            self._bore_process = None
 
     async def _start_bore_process(self):
         """Start the bore process."""
