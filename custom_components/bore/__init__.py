@@ -101,6 +101,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         self._bore_process = None
         self._assigned_port = None
         self._healthy = True
+        self._log_output_task = None
 
     @property
     def config_data(self):
@@ -153,6 +154,9 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _stop_bore_process(self):
         """Stop the bore process."""
+        if self._log_output_task and not self._log_output_task.done():
+            self._log_output_task.cancel()
+
         if self._bore_process and self._bore_process.returncode is None:
             _LOGGER.info("Stopping bore process...")
             try:
@@ -195,7 +199,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Bore command not found") from ex
 
         # Read output to find the assigned port and log everything
-        self.hass.async_create_task(self._log_output())
+        self._log_output_task = self.hass.async_create_task(self._log_output())
 
     async def _log_output(self):
         """Log the output of the bore process from stdout and stderr."""
@@ -231,9 +235,6 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             # Run both logging tasks concurrently until the process exits
             await asyncio.gather(log_stdout(), log_stderr())
-        finally:
-            if self._bore_process:
-                await self._bore_process.wait()
-                _LOGGER.info(
-                    "Bore process has terminated with code %s", self._bore_process.returncode
-                )
+        except asyncio.CancelledError:
+            # This is expected during shutdown, so we can ignore it
+            pass
