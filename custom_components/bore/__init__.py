@@ -53,6 +53,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator: BoreDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     await coordinator._stop_bore_process()
 
+    await asyncio.sleep(5)
+
     unload_ok = await hass.config_entries.async_forward_entry_unload(entry, ["sensor"])
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
