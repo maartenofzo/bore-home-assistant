@@ -199,7 +199,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Bore command not found") from ex
 
         # Read output to find the assigned port and log everything
-        self._log_output_task = self.hass.async_create_task(self._log_output())
+        self._log_output_task = asyncio.create_task(self._log_output())
 
     async def _log_output(self):
         """Log the output of the bore process from stdout and stderr."""
