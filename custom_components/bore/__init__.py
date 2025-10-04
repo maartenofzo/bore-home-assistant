@@ -202,8 +202,8 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.info("Bore process terminated (non-POSIX).")
                 except Exception as ex:
                     _LOGGER.error("Error killing bore process (non-POSIX): %s", ex)
-            finally:
-                self._bore_process = None
+                finally:
+                    self._bore_process = None
 
     async def _start_bore_process(self):
         """Start the bore process."""
