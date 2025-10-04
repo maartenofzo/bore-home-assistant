@@ -2,6 +2,7 @@
 """The Bore integration."""
 import asyncio
 import logging
+import signal
 from datetime import timedelta
 
 import async_timeout
@@ -52,8 +53,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     coordinator: BoreDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     await coordinator._stop_bore_process()
-
-    await asyncio.sleep(5)
 
     unload_ok = await hass.config_entries.async_forward_entry_unload(entry, ["sensor"])
     if unload_ok:
@@ -157,7 +156,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
         if self._bore_process and self._bore_process.returncode is None:
             _LOGGER.info("Stopping bore process...")
             try:
-                self._bore_process.terminate()
+                self._bore_process.send_signal(signal.SIGINT)
                 await asyncio.wait_for(self._bore_process.wait(), timeout=5.0)
                 _LOGGER.info("Bore process terminated.")
             except asyncio.TimeoutError:
