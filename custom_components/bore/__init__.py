@@ -2,12 +2,14 @@
 """The Bore integration."""
 import asyncio
 import logging
+import os
 import signal
 from datetime import timedelta
 
 import async_timeout
 import socket
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -35,6 +37,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    async def handle_shutdown(event):
+        """Handle the shutdown event."""
+        _LOGGER.info("Home Assistant is stopping. Stopping bore process.")
+        await coordinator._stop_bore_process()
+
+    shutdown_listener = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STOP, handle_shutdown
+    )
+
+    entry.async_on_unload(shutdown_listener)
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
     hass.async_create_task(
@@ -156,11 +168,33 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Health check failed: {ex}") from ex
 
     async def _stop_bore_process(self):
-        """Stop the bore process."""
+        """Stop the bore process and its entire process group."""
+        if self._log_output_task and not self._log_output_task.done():
+            self._log_output_task.cancel()
+
         if self._bore_process and self._bore_process.returncode is None:
-            _LOGGER.info("Forcefully stopping bore process with SIGKILL.")
-            self._bore_process.kill()
-            self._bore_process = None
+            _LOGGER.info("Stopping bore process group...")
+            try:
+                pgid = os.getpgid(self._bore_process.pid)
+                os.killpg(pgid, signal.SIGINT)
+                await asyncio.wait_for(self._bore_process.wait(), timeout=5.0)
+                _LOGGER.info("Bore process group terminated gracefully.")
+            except (ProcessLookupError, PermissionError) as ex:
+                _LOGGER.info("Bore process group already gone: %s", ex)
+            except asyncio.TimeoutError:
+                _LOGGER.warning(
+                    "Bore process group did not terminate gracefully, sending SIGKILL."
+                )
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                    await asyncio.wait_for(self._bore_process.wait(), timeout=2.0)
+                    _LOGGER.info("Bore process group killed.")
+                except Exception as kill_ex:
+                    _LOGGER.error("Error killing bore process group: %s", kill_ex)
+            except Exception as ex:
+                _LOGGER.error("Error stopping bore process group: %s", ex)
+            finally:
+                self._bore_process = None
 
     async def _start_bore_process(self):
         """Start the bore process."""
@@ -183,6 +217,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
                 *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                preexec_fn=os.setsid
             )
         except FileNotFoundError as ex:
             _LOGGER.error(
