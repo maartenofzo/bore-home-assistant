@@ -20,10 +20,6 @@ from .const import (
 class BoreOptionsFlow(OptionsFlow):
     """Bore options flow."""
 
-    def __init__(self, config_entry):
-        """Initialize the options flow."""
-        self.config_entry = config_entry
-
     async def async_step_init(self, user_input=None):
         """Handle a flow initialized by the user."""
         if user_input is not None:

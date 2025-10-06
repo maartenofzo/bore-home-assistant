@@ -7,16 +7,16 @@ from .const import DOMAIN
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up the Bore sensor."""
+    """Set up the Bore tunnel."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([BoreSensor(coordinator, entry)])
+    async_add_entities([BoreTunnel(coordinator, entry)])
 
 
-class BoreSensor(CoordinatorEntity, SensorEntity):
-    """Bore sensor."""
+class BoreTunnel(CoordinatorEntity, SensorEntity):
+    """Bore tunnel."""
 
     def __init__(self, coordinator, entry):
-        """Initialize the sensor."""
+        """Initialize the tunnel."""
         super().__init__(coordinator)
         self._entry = entry
 
@@ -27,8 +27,17 @@ class BoreSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def name(self):
-        """Return the name of the sensor."""
+        """Return the name of the tunnel."""
         return self._entry.title
+
+    @property
+    def device_info(self):
+        """Return device information."""
+        return {
+            "identifiers": {(DOMAIN, self._entry.entry_id)},
+            "name": "Bore Tunnel",
+            "manufacturer": "https://github.com/ekzhang",
+        }
 
     @property
     def state(self):

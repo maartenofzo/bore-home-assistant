@@ -1,4 +1,3 @@
-
 """The Bore integration."""
 import asyncio
 import logging
@@ -150,18 +149,18 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
             async with async_timeout.timeout(10):
                 session = aiohttp_client.async_get_clientsession(self.hass)
                 async with session.get(check_url) as response:
-                        if 200 <= response.status < 300:
-                            _LOGGER.debug("Health check to %s successful.", check_url)
-                            self._healthy = True
-                            return {"status": "connected"}
-                        else:
-                            _LOGGER.warning(
-                                "Health check to %s failed with status code %d. The tunnel will be restarted on the next update.",
-                                check_url,
-                                response.status,
-                            )
-                            self._healthy = False
-                            raise UpdateFailed(f"Health check failed with status code {response.status}")
+                    if 200 <= response.status < 300:
+                        _LOGGER.debug("Health check to %s successful.", check_url)
+                        self._healthy = True
+                        return {"status": "connected"}
+                    else:
+                        _LOGGER.warning(
+                            "Health check to %s failed with status code %d. The tunnel will be restarted on the next update.",
+                            check_url,
+                            response.status,
+                        )
+                        self._healthy = False
+                        raise UpdateFailed(f"Health check failed with status code {response.status}")
         except (asyncio.TimeoutError, aiohttp.ClientError) as ex:
             _LOGGER.warning(
                 "Health check to %s failed: %s. The tunnel will be restarted on the next update.",

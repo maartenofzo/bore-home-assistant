@@ -31,7 +31,7 @@ class BoreConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        return BoreOptionsFlow(config_entry)
+        return BoreOptionsFlow()
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
