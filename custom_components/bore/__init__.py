@@ -148,8 +148,8 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
         try:
             async with async_timeout.timeout(10):
-                async with aiohttp_client.async_get_clientsession(self.hass) as session:
-                    async with session.get(check_url) as response:
+                session = aiohttp_client.async_get_clientsession(self.hass)
+                async with session.get(check_url) as response:
                         if 200 <= response.status < 300:
                             _LOGGER.debug("Health check to %s successful.", check_url)
                             self._healthy = True
