@@ -11,6 +11,7 @@ import async_timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -147,7 +148,7 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
         try:
             async with async_timeout.timeout(10):
-                async with self.hass.helpers.aiohttp_client.async_get_clientsession() as session:
+                async with aiohttp_client.async_get_clientsession(self.hass) as session:
                     async with session.get(check_url) as response:
                         if 200 <= response.status < 300:
                             _LOGGER.debug("Health check to %s successful.", check_url)
