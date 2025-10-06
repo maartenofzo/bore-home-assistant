@@ -6,8 +6,8 @@ import os
 import signal
 from datetime import timedelta
 
+import aiohttp
 import async_timeout
-import socket
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
@@ -139,32 +139,35 @@ class BoreDataUpdateCoordinator(DataUpdateCoordinator):
 
         check_url = self.config_data.get(CONF_CHECK_URL)
         if not check_url and self._assigned_port:
-            check_url = f"{self.config_data.get(CONF_TO)}:{self._assigned_port}"
+            check_url = f"https://{self.config_data.get(CONF_TO)}:{self._assigned_port}"
 
         if not check_url:
             self._healthy = True
             return {"status": "connected"}  # Assume connected if no check url
 
-        if ":" in check_url:
-            host, port_str = check_url.split(":")
-            port = int(port_str)
-        else:
-            host = check_url
-            port = 443 # Default to HTTPS port
-
         try:
-            with socket.create_connection((host, port), timeout=10):
-                _LOGGER.debug("Health check to %s successful.", check_url)
-                self._healthy = True  # Mark as healthy for the next run.
-                return {"status": "connected"}
-        except (socket.timeout, ConnectionRefusedError, socket.gaierror) as ex:
+            async with async_timeout.timeout(10):
+                async with self.hass.helpers.aiohttp_client.async_get_clientsession() as session:
+                    async with session.get(check_url) as response:
+                        if 200 <= response.status < 300:
+                            _LOGGER.debug("Health check to %s successful.", check_url)
+                            self._healthy = True
+                            return {"status": "connected"}
+                        else:
+                            _LOGGER.warning(
+                                "Health check to %s failed with status code %d. The tunnel will be restarted on the next update.",
+                                check_url,
+                                response.status,
+                            )
+                            self._healthy = False
+                            raise UpdateFailed(f"Health check failed with status code {response.status}")
+        except (asyncio.TimeoutError, aiohttp.ClientError) as ex:
             _LOGGER.warning(
                 "Health check to %s failed: %s. The tunnel will be restarted on the next update.",
                 check_url,
                 ex,
             )
-            self._healthy = False  # Mark as unhealthy for the next run.
-            # Do not stop the process now; just signal the update failure.
+            self._healthy = False
             raise UpdateFailed(f"Health check failed: {ex}") from ex
 
     async def _stop_bore_process(self):
