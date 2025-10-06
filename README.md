@@ -1,4 +1,3 @@
-
 # Bore Home Assistant Integration
 
 This integration allows you to control a [bore](https://github.com/ekzhang/bore) client from Home Assistant.
@@ -24,11 +23,48 @@ Replace `/path/to/your/bore/binary` with the actual path to the `bore` binary on
 
 ## Configuration
 
-Configure the integration in the Home Assistant UI. All options from the `bore local` command are supported.
+Configure the integration in the Home Assistant UI.
 
-## How it Works
+### Configuration Options
 
-This integration sets up and manages a `bore` tunnel client. You can configure all options available to the `bore local` command directly within Home Assistant.
+| Option | Required | Default | Description |
+|---|---|---|---|
+| `to` | Yes | | The remote `bore` server to connect to (e.g., `bore.example.com`). |
+| `local_port` | Yes | | The local port to expose. |
+| `local_host` | No | `localhost` | The local host to expose. |
+| `port` | No | `7835` | The port on the remote `bore` server to connect to. |
+| `secret` | No | | A secret to authenticate with the `bore` server. |
+| `check_url` | No | | A URL to check the health of the tunnel. If not provided, the integration will construct a URL from the `to` and `port` options. The default protocol is `https`. If you provide a URL, you must include the protocol (e.g., `http://example.com`). |
+| `update_interval` | No | `5 minutes` | The interval at which to check the health of the tunnel. |
+
+## Security Considerations
+
+When using this integration, it's important to be aware of the security implications of exposing your Home Assistant instance to the internet.
+
+### Plain HTTP Tunnels
+
+If your Home Assistant instance is not configured with SSL/TLS (i.e., it's running on plain HTTP), the tunnel created by this integration will be **insecure**. All traffic, including credentials, will be sent in cleartext.
+
+In this case, it is strongly recommended to secure the connection using other means. For example, you could set up a VPN like [WireGuard](https://www.wireguard.com/) between your Home Assistant machine and the remote server, and then run the `bore` tunnel over the VPN. However, if you have a VPN, you might not need this integration at all.
+
+### SSL/TLS Tunnels
+
+Even if your Home Assistant instance is running with SSL/TLS, directly exposing it to the internet can still be risky. It makes your Home Assistant instance a direct target for attackers.
+
+For improved security, the recommended approach is to use this integration to create a tunnel to another machine on your local network that is running a reverse proxy (e.g., Nginx, Caddy, or Traefik). This reverse proxy can then forward traffic to your Home Assistant instance.
+
+
+By not exposing Home Assistant directly, you reduce its attack surface.
+
+### How it Works
+
+This integration starts and manages a `bore` client process using the provided configuration. It is equivalent to running the following command:
+
+```bash
+bore local <local_port> --to <to> --local-host <local_host> --port <port> --secret <secret>
+```
+
+The integration then monitors the `bore` process and the tunnel's health.
 
 ### Connection Status
 
@@ -40,10 +76,10 @@ All output from the `bore` CLI application is captured and made available as log
 
 ### Connection Health Check
 
-The integration periodically performs a configurable connection health check. This check can be configured to:
+The integration periodically performs a health check to ensure the tunnel is working correctly.
 
-*   **Ping a specific URL:** If a `check_url` is provided, the integration will perform an HTTP GET request to this URL and expect a 200 OK response.
-*   **Ping the remote server:** If no `check_url` is provided, the integration will perform an HTTP GET request to the configured remote `bore` server and the assigned port (either from configuration or extracted from successful `bore` logs).
+If you provide a `check_url`, the integration will send an HTTP GET request to this URL. A response with a status code in the 200-299 range is considered a success.
 
-If the health check fails (e.g., due to a timeout or non-200 response), the integration will attempt to restart the `bore` tunnel to re-establish a healthy connection.
+If you do not provide a `check_url`, the integration will construct a URL for you. It will use the `to` server and the port assigned by the `bore` server. The URL will be of the form `https://<to>:<assigned_port>`. If your local service is not running on HTTPS, you must provide a `check_url` with the `http://` protocol.
 
+If the health check fails, the integration will automatically restart the `bore` process to re-establish the connection.
